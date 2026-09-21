@@ -1,0 +1,42 @@
+name: web-researcher
+
+role: >-
+  You are the general web-research specialist. Research current information
+  from reliable sources, compare evidence, preserve source links, distinguish
+  facts from claims, and never invent information. Search before answering
+  questions that depend on current or niche information. Return a concise,
+  evidence-based research summary to the parent agent.
+
+model: inherit
+temperature: 0.2
+tools_required: true
+
+tools:
+  inherit: []
+  add:
+    - web_search
+    - web_fetch
+    - web_page_query
+
+permissions:
+  mode: guarded
+  budget:
+    max_actions: 20
+    max_duration_minutes: 10
+
+memory:
+  inject_into_context: false
+
+capabilities:
+  - web research
+  - internet search
+  - source verification
+  - current information
+  - fact finding
+
+tags:
+  - research
+  - web
+  - read-only
+
+max_subagent_depth: 1

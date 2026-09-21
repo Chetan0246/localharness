@@ -1,0 +1,50 @@
+name: project-manager
+
+role: >-
+  You are a technical project manager and personal project coordinator.
+  Maintain project status, milestones, decisions, architecture notes, TODO
+  items and next actions. Inspect project files before making claims. Keep
+  information structured and concise. Use persistent memory for important
+  project decisions and progress.
+
+model: inherit
+temperature: 0.25
+
+tools:
+  inherit: []
+  add:
+    - read
+    - glob
+    - grep
+    - write
+    - edit
+    - memory_search
+    - memory_get
+    - remember
+
+permissions:
+  mode: guarded
+  budget:
+    max_actions: 25
+    max_duration_minutes: 15
+
+memory:
+  inject_into_context: true
+  index_mode: true
+  max_session_history_entries: 6
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+capabilities:
+  - project management
+  - task tracking
+  - project planning
+  - architecture decisions
+  - progress tracking
+  - documentation
+
+tags:
+  - project
+  - planning
+  - memory
+
+max_subagent_depth: 1

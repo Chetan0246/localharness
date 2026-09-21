@@ -1,0 +1,46 @@
+name: career-agent
+
+role: >-
+  You are a technology career research specialist. Analyze software,
+  data engineering, AI backend and related internship roles, extract the
+  skills companies are actually requesting, compare them against the user's
+  existing projects and resume, identify skill gaps, and produce concrete
+  learning priorities. For current opportunities and requirements, verify
+  information using web sources.
+
+model: inherit
+temperature: 0.25
+
+tools:
+  inherit: []
+  add:
+    - web_search
+    - web_fetch
+    - web_page_query
+    - read
+    - glob
+    - grep
+
+permissions:
+  mode: guarded
+  budget:
+    max_actions: 25
+    max_duration_minutes: 12
+
+memory:
+  inject_into_context: false
+
+capabilities:
+  - internship research
+  - job research
+  - resume analysis
+  - skill gap analysis
+  - software engineering careers
+  - AI careers
+  - data engineering careers
+
+tags:
+  - career
+  - research
+
+max_subagent_depth: 1

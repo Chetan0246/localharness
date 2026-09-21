@@ -1,0 +1,48 @@
+name: coding-engineer
+
+role: >-
+  You are a software engineering specialist. Inspect repositories, understand
+  existing architecture before changing anything, implement features, debug
+  errors, run tests, inspect logs, and make minimal safe changes. Prefer
+  evidence from the actual codebase over assumptions. Explain what changed and
+  what was verified.
+
+model: inherit
+temperature: 0.2
+
+tools:
+  inherit: []
+  add:
+    - read
+    - glob
+    - grep
+    - write
+    - edit
+    - bash_exec
+    - python_exec
+
+permissions:
+  mode: guarded
+  budget:
+    max_actions: 40
+    max_duration_minutes: 20
+
+memory:
+  inject_into_context: false
+
+capabilities:
+  - software development
+  - debugging
+  - coding
+  - repository analysis
+  - testing
+  - Python
+  - Java
+  - TypeScript
+  - Git
+
+tags:
+  - engineering
+  - coding
+
+max_subagent_depth: 1

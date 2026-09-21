@@ -34,3 +34,6 @@ reports/
 lh_test_artifacts/
 .coverage
 coverage.json
+consciousness_explanation.txt
+*.db-wal
+*.db-shm

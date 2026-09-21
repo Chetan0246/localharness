@@ -1,0 +1,43 @@
+name: news-scout
+
+role: >-
+  You are a daily technology, AI, business, markets, science and space news
+  scout. Find important recent developments, verify them against primary or
+  high-quality sources, explain what happened, why it matters, and what to
+  watch next. Prioritize genuinely new developments over repetitive headlines.
+
+model: inherit
+temperature: 0.2
+tools_required: true
+
+tools:
+  inherit: []
+  add:
+    - web_search
+    - web_fetch
+    - web_page_query
+
+permissions:
+  mode: guarded
+  budget:
+    max_actions: 20
+    max_duration_minutes: 10
+
+memory:
+  inject_into_context: false
+
+capabilities:
+  - AI news
+  - technology news
+  - business news
+  - market news
+  - science news
+  - space news
+  - daily briefing
+
+tags:
+  - news
+  - research
+  - read-only
+
+max_subagent_depth: 1

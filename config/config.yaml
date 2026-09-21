@@ -1,0 +1,109 @@
+active_endpoint: null
+extra_endpoints: []
+org:
+  audit_log_path: audit.jsonl
+  context:
+    compaction_threshold_pct: 80.0
+    max_context_tokens: 16384
+    max_tool_output_chars: 32000
+    microagents: []
+    model_context_overrides: {}
+    preserve_first_n_messages: 4
+    preserve_last_n_messages: 8
+    system_prompt_file: null
+    tool_result_evict_threshold_chars: 8000
+    tool_result_eviction: true
+  default_max_tokens: null
+  default_model: gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf
+  default_temperature: 0.6
+  enforce_capability_floor: true
+  hooks: {}
+  log_level: info
+  name: default
+  permissions:
+    ask:
+      destructive_signatures: null
+      dropped_commands: null
+      git_config_dangerous_keys: null
+      inline_by_nature: null
+      interpreter_commands: null
+      mcp_trusted_servers: []
+      network_hosts: false
+      payload_commands: null
+      pipe_to_shell_sinks: null
+      pipe_to_shell_sources: null
+      protected_config_dir_entries: null
+      protected_paths_home: null
+      protected_paths_system: null
+      protected_paths_workspace: null
+      read_only_signatures: null
+      source_commands: null
+      subcommand_tools: null
+      timeout_s: null
+      wrapper_commands: null
+      write_shaped_commands: null
+    budget:
+      kill_file: KILL
+      max_actions: 100
+      max_duration_minutes: null
+      max_tool_calls: null
+    defaults_revision: 3
+    deny_patterns:
+    - write(*/.env)
+    - write(*/secrets*)
+    - write(*/config.yaml)
+    - write(*/agents/*.yaml)
+    - bash_exec(*sudo *)
+    - bash_exec(rm -rf *)
+    - bash_exec(*rm -rf *)
+    - bash_exec(chmod 777 *)
+    - bash_exec(*chmod 777*)
+    - bash_exec(*docker stop*)
+    - bash_exec(*docker kill*)
+    - bash_exec(*docker rm*)
+    - bash_exec(*docker compose down*)
+    - bash_exec(*docker-compose down*)
+    - bash_exec(*systemctl stop*)
+    - bash_exec(*systemctl disable*)
+    - bash_exec(*systemctl kill*)
+    - bash_exec(*systemctl mask*)
+    - bash_exec(*pkill*)
+    - bash_exec(*killall*)
+    - bash_exec(kill *)
+    - bash_exec(* kill *)
+    - bash_exec(*shutdown*)
+    - bash_exec(*reboot*)
+    - bash_exec(*poweroff*)
+    - bash_exec(*memory.db*)
+    - bash_exec(*facts_archive*)
+    - bash_exec(*memory-archive*)
+    - bash_exec(*localharness memory *)
+    - python_exec(*memory.db*)
+    - python_exec(*facts_archive*)
+    - python_exec(*memory-archive*)
+    - python_exec(*localharness memory *)
+    mode: auto
+    workspace_root: null
+proposer: null
+provider:
+  api_key: none
+  available_models:
+  - gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf
+  base_url: http://127.0.0.1:8080/v1
+  default_model: gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf
+  inference_queue_wait_seconds: 600.0
+  provider_type: llamacpp
+  supports_function_calling: true
+  timeout_seconds: 600.0
+sentinel:
+  duplicate_consecutive_k: 3
+  duplicate_similarity: 0.9
+  overfit_gap_threshold: 0.1
+  saturation_ceiling: 0.99
+  saturation_k: 5
+server: null
+terminal:
+  input_router_tier2_enabled: true
+  inputbox_enabled: true
+  show_reasoning: false
+version: '1'
