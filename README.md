@@ -42,26 +42,26 @@ Running multi-agent systems on consumer laptops with tight VRAM budgets (4GB iGP
 
 ```mermaid
 flowchart TD
-    User([User Request]) --> Orch[Orchestrator<br/><b>4 tools</b>: agent, remember, memory_*]
+    User(["User Request"]) --> Orch["Orchestrator<br/>4 tools: agent, remember, memory_*"]
     
-    subgraph MemoryLayer [Memory Architecture]
-        OrchMemory[(Root Memory<br/>General Preferences)]
-        SpecialistMemory[(Domain Memory<br/>DSA / Project / Study)]
+    subgraph MemoryLayer ["Memory Architecture"]
+        OrchMemory[("Root Memory<br/>General Preferences")]
+        SpecialistMemory[("Domain Memory<br/>DSA, Project, Study")]
     end
     
     Orch -.->|Preferences| OrchMemory
     
-    subgraph Specialists [Specialized Domain Subagents (Whitelisted Tools)]
-        DSA[dsa-mentor<br/>Java DSA, LeetCode, Hints]
-        Web[web-researcher<br/>Deep Research, Fact Verification]
-        News[news-scout<br/>Daily AI & Tech Briefings]
-        Code[coding-engineer<br/>Refactoring, Edits, Testing]
-        Data[data-engineer<br/>SQL, ETL, Python Analytics]
-        Study[study-tutor<br/>Textbooks, Concept Mastery]
-        Career[career-agent<br/>Resumes, Skill Gap Analysis]
-        Doc[document-analyst<br/>PDF/Report Deep Dives]
-        PM[project-manager<br/>Milestones, Architecture, ADRs]
-        Sys[system-agent<br/>Fedora, Hardware & LLM Health]
+    subgraph Specialists ["Specialized Domain Subagents (Whitelisted Tools)"]
+        DSA["dsa-mentor<br/>Java DSA, LeetCode, Hints"]
+        Web["web-researcher<br/>Deep Research, Fact Verification"]
+        News["news-scout<br/>Daily AI & Tech Briefings"]
+        Code["coding-engineer<br/>Refactoring, Edits, Testing"]
+        Data["data-engineer<br/>SQL, ETL, Python Analytics"]
+        Study["study-tutor<br/>Textbooks, Concept Mastery"]
+        Career["career-agent<br/>Resumes, Skill Gap Analysis"]
+        Doc["document-analyst<br/>PDF & Report Deep Dives"]
+        PM["project-manager<br/>Milestones, Architecture, ADRs"]
+        Sys["system-agent<br/>Fedora, Hardware & LLM Health"]
     end
 
     Orch -->|Delegates| DSA
@@ -79,7 +79,7 @@ flowchart TD
     PM -.-> SpecialistMemory
     Study -.-> SpecialistMemory
 
-    Specialists -->|Distilled Findings| Synthesis[Synthesis & Response]
+    Specialists -->|Distilled Findings| Synthesis["Synthesis & Response"]
     Synthesis --> User
 ```
 
