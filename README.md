@@ -1,4 +1,4 @@
-# LocalHarness: 10-Agent Autonomous System on an Edge Laptop
+# LocalHarness: Multi-Agent Local Orchestration on an Edge Laptop
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![Model: Gemma 4 E4B QAT](https://img.shields.io/badge/Model-Gemma%204%20E4B%20QAT-orange.svg)](https://huggingface.co/google/gemma-4-E4B-it)
@@ -6,27 +6,35 @@
 [![Hardware: 16GB AMD APU](https://img.shields.io/badge/Hardware-16GB%20RAM%20%7C%204GB%20iGPU-purple.svg)](https://www.amd.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An offline, fully private, hierarchical multi-agent assistant suite engineered to run entirely on a modest **16GB consumer laptop** (with 4GB of shared RAM allocated as VRAM to an integrated AMD Radeon 780M GPU).
+A local, hierarchical multi-agent assistant configuration built on the open-source **LocalHarness** runtime and tailored for resource-constrained edge hardware.
 
-Zero cloud dependencies. Zero API costs. 100% local inference.
+This repository bundles:
+1. **The LocalHarness Engine:** A lightweight agent layer providing YAML-configured agent definition, tool resolution, capability floor validation, and SQLite-backed memory for locally served LLMs.
+2. **A 10-Specialist Agent Suite:** A pre-configured multi-agent setup tested and evaluated on a **16GB consumer laptop** (with 4GB of shared memory allocated to an integrated AMD Radeon 780M GPU) using **Google's Gemma 4 E4B QAT** running via `llama.cpp`.
 
 ---
 
-## 💡 The Engineering Challenge
+## ⚙️ Core LocalHarness Capabilities
 
-Most modern multi-agent systems rely on multi-billion parameter frontier models hosted on cloud APIs (Claude 3.5 Sonnet, GPT-4o) or require workstation setups with dual RTX 4090s. 
+LocalHarness sits on top of local inference providers (such as `llama.cpp`, `vLLM`, or `Ollama`) and manages agent lifecycles, tool invocation, and memory storage. Its documented architectural features include:
 
-Running 10 autonomous agents on an edge machine with only **4GB of VRAM** presents unique challenges:
-1. **Context Bloat:** Small models (like Gemma 4 E4B) rapidly degrade in reasoning capability when handed bloated tool sets (15+ function schemas in context).
-2. **Execution Looping:** Small models without clear tool boundaries try to improvise—often inventing imaginary files or repeating failed tool calls until stuck.
-3. **Security Risks:** Exposing untrusted web ingestion (`web_search`, `web_fetch`) to the same agent context holding host-level tools (`bash_exec`, `write`) opens prompt-injection vulnerabilities.
+- **Declarative YAML Agent Configurations:** Personas, whitelisted toolsets, operational budgets (`max_actions`, `max_duration_minutes`), and memory parameters are defined in YAML files (`~/.localharness/agents/<name>.yaml`), eliminating the need to write custom Python glue code for each role.
+- **Configuration-Level Capability Floor:** Mitigates direct prompt-injection risks by enforcing a static separation of concerns at tool resolution. An agent holding untrusted web ingestion tools (`web_search`, `web_fetch`, `web_page_query`) cannot simultaneously be assigned host-dangerous execution tools (`bash_exec`, `write`, `edit`, `python_exec`).
+- **Semantic Vector & Fact Storage:** Agents can persist key facts to an isolated SQLite database (`memory.db`). Embeddings are generated locally via `sentence-transformers` (configured to run `all-MiniLM-L6-v2` on CPU), supporting semantic similarity search (`memory_search`), fact lookup (`memory_get`), and write-time embeddings (`remember`).
+- **Chunked Document Inspection:** Long documents and text files can be inspected sequentially using `load_document` and `chunk`, enabling agents to examine sections of files without overflowing small model context windows.
+- **Deterministic Permission Gate:** Every tool call passes through an argument-evaluating permission gate with configurable deny patterns (e.g., blocking `sudo`, recursive `rm`, or modifications to sensitive configuration files) across `auto`, `guarded`, and `unattended` modes.
+- **Flat Subagent Delegation:** Supports hierarchical coordination (`max_subagent_depth: 1`), allowing a parent agent to invoke a specialized subagent via the `agent` tool and receive a distilled summary of findings.
 
-### The Solution: Constrained Hierarchical Design
-By leveraging strict software engineering principles:
-- **Root Orchestrator is restricted to 4 tools only** (`agent`, `remember`, `memory_search`, `memory_get`). It cannot touch files, run bash commands, or browse the web. Its sole responsibility is task decomposition, routing, and response synthesis.
-- **Whitelisted Tool Profiles (`inherit: []`)**: Every specialist receives only 3 to 7 explicit tools, minimizing token overhead and eliminating hallucinated verbs.
-- **Enforced Capability Floor**: Structural quarantine between untrusted web content and host-acting tools.
-- **CPU-Powered Vector Memory**: Semantic memory retrieval using local `sentence-transformers/all-MiniLM-L6-v2` running on CPU in milliseconds, leaving GPU VRAM exclusively for LLM inference.
+---
+
+## 💡 Edge Constraints & Engineering Strategy
+
+Running multi-agent systems on consumer laptops with tight VRAM budgets (4GB iGPU allocation) requires careful prompt and tool management, especially with ~4B parameter models like Gemma 4 E4B:
+
+1. **Tool Minimization (`inherit: []`):** Handing a small local model a large catalog of 15+ tool schemas consumes significant context tokens and increases the rate of malformed arguments or hallucinated tool names. By configuring each agent with `inherit: []` and an explicit `add:` list of 3 to 7 tools, schemas stay compact and relevant.
+2. **Lean 4-Tool Root Orchestrator:** The primary coordinator is assigned only `agent`, `remember`, `memory_search`, and `memory_get`. Because it lacks file, web, and shell tools, it is architecturally guided to delegate domain work rather than attempting to execute tasks itself.
+3. **Memory Tiering:** General user preferences (learning style, preferred explanations) are stored in the orchestrator's root memory. Domain-specific progress and notes are routed to the relevant specialist (e.g., Java DSA weaknesses to `dsa-mentor`, architecture decisions to `project-manager`).
+4. **Offloading Vector Operations to CPU:** Embedding generation runs locally on CPU using `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional vectors), preserving GPU memory exclusively for `llama.cpp` inference.
 
 ---
 
@@ -77,44 +85,50 @@ flowchart TD
 
 ---
 
-## 🤖 The 10 Specialists + Root Orchestrator
+## 🤖 Specialist Agent Catalog
 
 | Agent | Config | Primary Role | Whitelisted Tools |
 | :--- | :--- | :--- | :--- |
-| **`orchestrator`** | [`orchestrator.yaml`](agents/orchestrator.yaml) | Primary coordinator. Routes tasks, coordinates compound workflows, and retains global user preferences. | `agent`, `memory_search`, `memory_get`, `remember` **(Strict 4-tool lean root)** |
-| **`dsa-mentor`** | [`dsa-mentor.yaml`](agents/dsa-mentor.yaml) | Java DSA interview coach. Teaches patterns over memorization; tracks weaknesses and problem logs in persistent memory. | `read`, `glob`, `grep`, `python_exec`, `memory_search`, `memory_get`, `remember` |
-| **`web-researcher`** | [`web-researcher.yaml`](agents/web-researcher.yaml) | Read-only internet intelligence. Fact verification and research summaries with source links. | `web_search`, `web_fetch`, `web_page_query` |
-| **`news-scout`** | [`news-scout.yaml`](agents/news-scout.yaml) | Daily tech scout. Synthesizes recent breakthroughs in AI, software engineering, markets, and space. | `web_search`, `web_fetch`, `web_page_query` |
-| **`coding-engineer`** | [`coding-engineer.yaml`](agents/coding-engineer.yaml) | Full software engineering agent. Inspects repositories, applies minimal safe edits, runs test suites, and debugs. | `read`, `glob`, `grep`, `write`, `edit`, `bash_exec`, `python_exec` |
-| **`data-engineer`** | [`data-engineer.yaml`](agents/data-engineer.yaml) | Data pipelines, SQL query optimization, ETL workflows, schema design, and dataset validation. | `read`, `glob`, `grep`, `write`, `edit`, `python_exec`, `bash_exec`, `load_document`, `chunk` |
-| **`study-tutor`** | [`study-tutor.yaml`](agents/study-tutor.yaml) | Academic tutor. Explains concepts from textbooks, syllabus notes, and diagnostic question generation. | `read`, `glob`, `grep`, `load_document`, `chunk`, `memory_search`, `memory_get`, `remember` |
-| **`career-agent`** | [`career-agent.yaml`](agents/career-agent.yaml) | Internship & job market researcher. Analyzes industry requirements against resumes to identify skill gaps. | `web_search`, `web_fetch`, `web_page_query`, `read`, `glob`, `grep` |
-| **`document-analyst`** | [`document-analyst.yaml`](agents/document-analyst.yaml) | Long-document analyst. Extracts facts, metrics, and quotes from large PDFs and specifications (no host actions). | `read`, `glob`, `grep`, `load_document`, `chunk` |
-| **`project-manager`** | [`project-manager.yaml`](agents/project-manager.yaml) | Architecture and task tracker. Maintains project milestones, TODOs, and architectural decisions (ADRs). | `read`, `glob`, `grep`, `write`, `edit`, `memory_search`, `memory_get`, `remember` |
-| **`system-agent`** | [`system-agent.yaml`](agents/system-agent.yaml) | Linux system engineer. Diagnoses hardware health, RAM/VRAM utilization, thermal status, and `llama-server` performance. | `read`, `glob`, `grep`, `bash_exec` |
+| **`orchestrator`** | [`orchestrator.yaml`](agents/orchestrator.yaml) | Primary coordinator. Evaluates requests, routes domain tasks to specialists, and stores general user preferences. | `agent`, `memory_search`, `memory_get`, `remember` **(Lean 4-tool root)** |
+| **`dsa-mentor`** | [`dsa-mentor.yaml`](agents/dsa-mentor.yaml) | Java DSA interview tutor. Focuses on patterns and algorithmic analysis; tracks weak topics and solved problems in memory. | `read`, `glob`, `grep`, `python_exec`, `memory_search`, `memory_get`, `remember` |
+| **`web-researcher`** | [`web-researcher.yaml`](agents/web-researcher.yaml) | Read-only web research. Retrieves up-to-date information, cross-checks sources, and returns cited summaries. | `web_search`, `web_fetch`, `web_page_query` |
+| **`news-scout`** | [`news-scout.yaml`](agents/news-scout.yaml) | Technology and AI news tracker. Summarizes recent headlines and industry developments. | `web_search`, `web_fetch`, `web_page_query` |
+| **`coding-engineer`** | [`coding-engineer.yaml`](agents/coding-engineer.yaml) | Software engineering agent. Analyzes codebase structure, applies localized edits, and executes tests. | `read`, `glob`, `grep`, `write`, `edit`, `bash_exec`, `python_exec` |
+| **`data-engineer`** | [`data-engineer.yaml`](agents/data-engineer.yaml) | Data engineering specialist. Assists with SQL queries, ETL/ELT pipelines, schema design, and dataset analysis. | `read`, `glob`, `grep`, `write`, `edit`, `python_exec`, `bash_exec`, `load_document`, `chunk` |
+| **`study-tutor`** | [`study-tutor.yaml`](agents/study-tutor.yaml) | Academic study partner. Explains concepts from uploaded notes and textbooks, providing progressive explanations. | `read`, `glob`, `grep`, `load_document`, `chunk`, `memory_search`, `memory_get`, `remember` |
+| **`career-agent`** | [`career-agent.yaml`](agents/career-agent.yaml) | Tech career and internship researcher. Evaluates job listings against resume skillsets to identify learning gaps. | `web_search`, `web_fetch`, `web_page_query`, `read`, `glob`, `grep` |
+| **`document-analyst`** | [`document-analyst.yaml`](agents/document-analyst.yaml) | Document extraction agent. Analyzes long technical documents and reports without host mutation capabilities. | `read`, `glob`, `grep`, `load_document`, `chunk` |
+| **`project-manager`** | [`project-manager.yaml`](agents/project-manager.yaml) | Project coordinator. Tracks task status, TODO lists, and architectural decisions (ADRs) in persistent memory. | `read`, `glob`, `grep`, `write`, `edit`, `memory_search`, `memory_get`, `remember` |
+| **`system-agent`** | [`system-agent.yaml`](agents/system-agent.yaml) | System inspector. Checks host diagnostic metrics (RAM, VRAM, thermals) and inspects `llama-server` process health. | `read`, `glob`, `grep`, `bash_exec` |
 
 ---
 
-## 🔒 Security & The Capability Floor
+## 🔒 Security Architecture: The Capability Floor
 
-To protect the host system from prompt injection attacks embedded in untrusted web pages, this system enforces an uncompromising capability rule:
+LocalHarness enforces a structured capability floor designed to mitigate prompt-injection attacks:
 
-> **No single agent may hold untrusted web ingestion tools and host-dangerous execution tools simultaneously.**
+```text
+Untrusted Web Ingestion               Host-Dangerous Actions
+(web_search, web_fetch, ...)          (bash_exec, write, edit, python_exec)
+           \                                /
+            \                              /
+             X   CANNOT CO-RESIDE IN ONE  X
+             X       AGENT TOOLSET        X
+```
 
-- **Untrusted Ingest:** `web_search`, `web_fetch`, `web_page_query`
-- **Host-Dangerous:** `bash_exec`, `write`, `edit`, `python_exec`
-
-If an agent needs information from the web to make a code change, the orchestrator delegates to `web-researcher` first, receives a sanitized data summary, and subsequently delegates the implementation task to `coding-engineer`.
+- **Enforcement Mechanism:** Before an agent loop starts, the tool registry checks that the agent's resolved toolset does not combine tools from `UNTRUSTED_INGEST` and `HOST_DANGEROUS`.
+- **Workflow:** For tasks requiring external documentation to modify code, the orchestrator delegates to `web-researcher` first, receives a sanitized text summary, and then passes those findings to `coding-engineer` in a separate turn.
+- *Caveat:* The capability floor operates at the tool resolution and dispatch layers of the harness. It provides architectural defense-in-depth, but does not replace operating system sandboxing (e.g., containers, firejail) when executing untrusted commands.
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Getting Started
 
 ### Prerequisites
-- **OS:** Linux (Fedora, Ubuntu, Arch, etc.) or macOS
-- **Hardware:** 16GB RAM (at least 4GB allocated to integrated/dedicated GPU)
-- **Tooling:** Python 3.12+, [`uv`](https://github.com/astral-sh/uv), and [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
-- **Model:** `gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf` (or any compatible quantized GGUF)
+- **Operating System:** Linux (Fedora, Ubuntu, Debian, etc.) or macOS
+- **Hardware:** 16GB RAM recommended (tested with 4GB allocated to integrated AMD Radeon 780M GPU)
+- **Dependencies:** Python 3.12+, [`uv`](https://github.com/astral-sh/uv), and [`llama.cpp`](https://github.com/ggerganov/llama.cpp)
+- **Model:** `gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf` (or any compatible GGUF served via `llama-server`)
 
 ### 1. Clone the Repository
 ```bash
@@ -122,13 +136,13 @@ git clone https://github.com/Chetan0246/localharness.git
 cd localharness
 ```
 
-### 2. Launch the Local Inference Server
-Start `llama-server` on your machine using Flash Attention and quantized KV caches:
+### 2. Start the Inference Server
+Run `llama-server` configured with Flash Attention and quantized KV caches:
 ```bash
-# Using the provided launcher script:
+# Using the helper script:
 LLAMA_DIR="$HOME/llama.cpp" ./scripts/run_gemma.sh
 ```
-Or execute directly:
+Or start manually:
 ```bash
 ./build/bin/llama-server \
   -m models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf \
@@ -140,22 +154,22 @@ Or execute directly:
   --host 127.0.0.1 --port 8080
 ```
 
-### 3. Install & Validate Agents
-Run the automated setup script to synchronize agent configurations into `~/.localharness/agents/` and verify dependencies:
+### 3. Synchronize Agent Configurations
+Run the setup script to copy agent definitions to `~/.localharness/agents/`, configure CPU resonance embeddings, and run initial validation:
 ```bash
 ./scripts/setup_agents.sh
 ```
 
-### 4. Launch the Interactive REPL
+### 4. Start LocalHarness
 ```bash
 uv run localharness start
 ```
 
 ---
 
-## 🧪 Verified Test Battery
+## 🧪 Evaluation Test Sequence
 
-The architecture has been verified against this targeted evaluation sequence:
+The following sequence was used to verify routing and tool execution on Gemma 4 E4B:
 
 ### Test A: Root Memory & Recall
 ```text
@@ -165,46 +179,54 @@ The architecture has been verified against this targeted evaluation sequence:
 
 ❯ What do I prefer when learning DSA?
 ◆ memory_search
-✓ Retrieves and quotes the stored preference accurately.
+✓ Retrieves the recorded preference from local SQLite memory.
 ```
 
 ### Test B: Domain Delegation
 ```text
 ❯ Continue my Java DSA training.
 ◆ agent dsa-mentor
-✓ Root delegates to dsa-mentor rather than answering at root level.
+✓ Root orchestrator routes to dsa-mentor rather than generating an answer directly.
 ```
 
-### Test C: Precise Routing
+### Test C: Specialized Routing
 ```text
 ❯ Give me today's AI and technology news.
 ◆ agent news-scout
-✓ Correctly routes to news-scout (avoiding generic web-researcher collision).
+✓ Evaluates query and routes to news-scout instead of web-researcher.
 ```
 
-### Test D: Security Containment
+### Test D: Security & Tool Confinement
 ```text
 ❯ Search for the latest version of package numpy and install it.
 ◆ agent web-researcher
-✓ Root never calls bash_exec; web inspection is strictly sandboxed.
+✓ Root delegates research; no host execution tools exist at the root level.
 ```
 
-### Compound Multi-Agent Workflow
+### Test E: Compound Task Decomposition
 ```text
 ❯ Research current requirements for AI backend internships, inspect my current project stack, and identify my skill gaps.
 ```
-*Trace execution:*
-1. Orchestrator calls `agent(career-agent)` to research current hiring requirements.
-2. Orchestrator calls `agent(project-manager)` to inspect local project files and dependencies.
-3. Orchestrator synthesizes both findings into a unified, actionable gap analysis.
+*Observed flow:*
+1. Orchestrator calls `agent(career-agent)` for current role requirements.
+2. Orchestrator calls `agent(project-manager)` to inspect project structure.
+3. Orchestrator synthesizes both outputs into a unified comparison.
 
 ---
 
-## 📂 Repository Structure
+## ⚠️ Known Limitations & Boundaries
+
+- **Model Capacity:** Lightweight ~4B parameter models require unambiguous prompts. Ambiguous compound requests may occasionally require user clarification or manual task splitting.
+- **Internet Requirement:** While local coding, DSA practice, memory recall, and file inspection run completely offline, web-based agents (`web-researcher`, `news-scout`, `career-agent`) require active network connectivity.
+- **Host Action Confirmation:** In default `guarded` permission mode, commands that modify files or execute shell commands require explicit user approval before execution.
+
+---
+
+## 📂 Repository Layout
 
 ```text
 localharness/
-├── agents/                       # 10 Domain Specialists + Lean Orchestrator
+├── agents/                       # 10 Specialist YAMLs + Lean Orchestrator
 │   ├── career-agent.yaml
 │   ├── coding-engineer.yaml
 │   ├── data-engineer.yaml
@@ -219,23 +241,19 @@ localharness/
 ├── config/                       # Configuration Templates
 │   ├── config.yaml               # Global harness configuration
 │   └── overrides.yaml            # Machine-wide CPU embedding overrides
-├── scripts/                      # Utility Scripts
-│   ├── run_gemma.sh              # llama-server runner with optimal flags
-│   └── setup_agents.sh           # Automated setup and sync script
+├── scripts/                      # Setup and Launcher Scripts
+│   ├── run_gemma.sh              # llama-server launcher
+│   └── setup_agents.sh           # Automated agent installation and validation
 ├── src/localharness/             # Core harness runtime engine
-├── pyproject.toml                # Dependencies and project definition
+├── pyproject.toml                # Project metadata and dependencies
 └── README.md
 ```
 
 ---
 
-## 🤝 Acknowledgements
+## 📄 License & Credits
 
-- Built on top of the open-source **LocalHarness** engine by [@ahwurm](https://github.com/ahwurm/localharness).
-- Powered by **Google DeepMind's Gemma 4** open weights.
-- Inference enabled by Georgi Gerganov's **llama.cpp**.
-
----
-
-## 📄 License
-This project is licensed under the [MIT License](LICENSE).
+- Core harness engine created by [@ahwurm](https://github.com/ahwurm/localharness).
+- Agent configurations and edge setup by [Chetan Moorthy](https://github.com/Chetan0246).
+- Inference powered by [llama.cpp](https://github.com/ggerganov/llama.cpp) and [Google DeepMind Gemma](https://huggingface.co/google/gemma-4-E4B-it).
+- Licensed under the [MIT License](LICENSE).
