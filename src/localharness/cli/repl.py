@@ -524,11 +524,24 @@ class OrchestratorREPL:
                 channel=ch_id if isinstance(ch_id, str) else "terminal",
             )
         )
-        # Streaming is opt-in BY THE CHANNEL, through a declared flag rather than the presence of
-        # a method: a channel that says `streams_tokens` gets the model's answer as it generates,
-        # and one that says nothing is driven exactly as before. The terminal says nothing and
-        # keeps passing None — it has never streamed answer text — so this adds live text to the
-        # web channel without touching what any existing surface does.
+        # Dynamic Router: ensure the active model matches the task requirements
+        from localharness.orchestrator.dynamic_router import DynamicModelRouter
+        router = DynamicModelRouter.get_instance()
+        if router.enabled:
+            cur_agent_name = getattr(getattr(self._agent, "_config", None), "name", "orchestrator")
+            target_model = router.classify_task_tier(text, agent_name=cur_agent_name)
+            current_model = await router.get_active_model()
+            if target_model != current_model:
+                await self._send_info(
+                    f"[Dynamic Router] Task matches {target_model} — auto-switching models...",
+                    colorize=True,
+                )
+                await router.switch_model(
+                    target_model,
+                    llm=self._agent._llm,
+                    on_status=lambda msg: self._send_info(msg, colorize=True),
+                )
+
         on_token = self._channel.on_token if getattr(self._channel, "streams_tokens", False) else None
         return asyncio.ensure_future(self._agent.run_turn(task=text, on_token=on_token))
 
@@ -1124,6 +1137,10 @@ class OrchestratorREPL:
             await self._handle_model_cmd(cmd.strip()[len("/model"):].strip())
             return True
 
+        if cmd_lower == "/router" or cmd_lower.startswith("/router "):
+            await self._handle_router_cmd(cmd.strip()[len("/router"):].strip())
+            return True
+
         if cmd_lower == "/reasoning" or cmd_lower.startswith("/reasoning "):
             await self._handle_reasoning_cmd(cmd_lower[len("/reasoning"):].strip())
             return True
@@ -1187,6 +1204,60 @@ class OrchestratorREPL:
 
         # Not a command — pass through to the orchestrator (natural language / paths).
         return False
+
+    # ------------------------------------------------------------------ #
+    # /router — task-based dynamic model router
+    # ------------------------------------------------------------------ #
+
+    async def _handle_router_cmd(self, arg: str) -> None:
+        """Handle /router slash command: status, on, off, or manual tier switch."""
+        from localharness.orchestrator.dynamic_router import (
+            DynamicModelRouter, TIER_1_MODEL, TIER_2_MODEL, TIER_3_MODEL,
+        )
+        router = DynamicModelRouter.get_instance()
+        arg_lower = arg.lower().strip()
+
+        if arg_lower == "on":
+            router.enabled = True
+            await self._send_info("Dynamic Task Router is now ENABLED. Models will auto-swap based on tasks/specialists.", colorize=True)
+            return
+
+        if arg_lower == "off":
+            router.enabled = False
+            await self._send_info("Dynamic Task Router is now DISABLED. Session will stay on current model.", colorize=True)
+            return
+
+        llm = getattr(self._agent, "_llm", None)
+
+        if arg_lower in ("ling", "fast", "tier1"):
+            await self._send_info(f"Routing to Tier 1 ({TIER_1_MODEL})...", colorize=True)
+            await router.switch_model(TIER_1_MODEL, llm=llm, on_status=lambda m: self._send_info(m, colorize=True))
+            return
+
+        if arg_lower in ("gemma", "daily", "tier2"):
+            await self._send_info(f"Routing to Tier 2 ({TIER_2_MODEL})...", colorize=True)
+            await router.switch_model(TIER_2_MODEL, llm=llm, on_status=lambda m: self._send_info(m, colorize=True))
+            return
+
+        if arg_lower in ("qwen", "heavy", "tier3", "coder"):
+            await self._send_info(f"Routing to Tier 3 ({TIER_3_MODEL})...", colorize=True)
+            await router.switch_model(TIER_3_MODEL, llm=llm, on_status=lambda m: self._send_info(m, colorize=True))
+            return
+
+        # Status display
+        active_model = await router.get_active_model()
+        status_lines = [
+            "Dynamic Task-Based Model Router Status:",
+            f"  Auto-Routing: {'ENABLED' if router.enabled else 'DISABLED'}",
+            f"  Active Model: {active_model or 'None (server stopped)'}",
+            "",
+            "  Tier 1 [Fast · ~35 t/s]:     Ling-3.0-tiny (Web search, news scout, doc analyst)",
+            "  Tier 2 [Daily · ~13 t/s]:    Gemma-4-E4B   (Orchestrator, DSA mentor, general)",
+            "  Tier 3 [Heavy · ~7 t/s]:     Qwen3.5-9B    (Coding engineer, algorithms, data eng)",
+            "",
+            "Commands: /router on | /router off | /router [ling|gemma|qwen]",
+        ]
+        await self._send_info("\n".join(status_lines), colorize=True)
 
     # ------------------------------------------------------------------ #
     # /model — list and swap models

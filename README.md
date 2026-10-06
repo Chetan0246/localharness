@@ -114,6 +114,17 @@ Launching ling-tiny — the swap can take several minutes...
 Switched to Ling-3.0-tiny-Q4_K_M.gguf on ling-tiny — http://127.0.0.1:8080/v1
 ```
 
+#### 3. Automatic Task-Based Dynamic Router
+Rather than manually switching models every time you shift between coding, research, or daily tasks, the **Dynamic Model Router** (`src/localharness/orchestrator/dynamic_router.py`) automatically starts and stops models based on tasks:
+
+- **Task Entry Auto-Switching:** At the REPL boundary, prompts requiring software development (scripts, algorithms, debugging, SQL) automatically swap to **Tier 3 (Qwen 9B)**. Web searches and news queries swap to **Tier 1 (Ling 3.0 tiny)**. General questions, memory recall, and tutoring run on **Tier 2 (Gemma 4)**.
+- **Subagent Delegation Auto-Switching:** When the orchestrator delegates via the `agent` tool:
+  - Calls to `coding-engineer` or `data-engineer` automatically swap in **Qwen 9B**.
+  - Calls to `web-researcher`, `news-scout`, or `document-analyst` automatically swap in **Ling 3.0 tiny**.
+  - Upon return to root depth, **Gemma 4** is restored for final response synthesis.
+- **Cold Boot Recovery:** If `localharness start` is run while no server is active, the router automatically boots the daily driver backend instead of erroring out.
+- **Interactive REPL Command (`/router`):** Check status or toggle automatic routing live via `/router on`, `/router off`, or `/router [ling|gemma|qwen]`.
+
 ---
 
 ## 🏛️ System Architecture

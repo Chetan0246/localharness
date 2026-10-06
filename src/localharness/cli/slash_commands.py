@@ -10,6 +10,7 @@ SLASH_COMMANDS: list[tuple[str, str]] = [
     ("/help", "Show this help message"),
     ("/agents", "List configured agents"),
     ("/model", "List available models; /model <name|number> to switch"),
+    ("/router", "Task-based dynamic model router; /router [status|on|off|ling|gemma|qwen]"),
     ("/reasoning", "Stream the model's reasoning while it thinks; /reasoning on|off"),
     ("/verbose", "Show reasoning and every tool call with its arguments; /verbose on|off"),
     ("/mode", "Permission mode for this session; /mode guarded|trusted|read-only"),

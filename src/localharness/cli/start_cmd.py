@@ -802,6 +802,16 @@ async def _start_async(agent_name: str | None, verbose: bool, debug: bool, confi
             # on Windows a stale pidfile raises a plain OSError instead of ProcessLookupError.
             # Managed-server lifecycle is POSIX-only for now; degrade to a message, not a traceback.
             err_console.print(f"[bold red]Error:[/bold red] managed vLLM failed to start: {exc}")
+    elif not probe_ok and harness.server is None:
+        from localharness.orchestrator.dynamic_router import DynamicModelRouter, TIER_2_MODEL
+        router = DynamicModelRouter.get_instance()
+        if router.enabled:
+            target_to_start = resolved_model or TIER_2_MODEL
+            console.print(f"[yellow][Dynamic Router][/yellow] Model server is cold — automatically starting {target_to_start}...")
+            if await router.switch_model(target_to_start):
+                await _probe_client.aclose()
+                _probe_client = LLMClient(_initial_cfg)
+                probe_ok, probed_mode, served_window, probe_error = await _probe_llm(_probe_client)
     # The probe client has done its job — the session's real client is rebuilt below with the
     # probe-derived mode — so release its httpx pool here (#154), ahead of the `typer.Exit(1)`
     # failure paths just after, which would else leave the sockets to GC on the way out.

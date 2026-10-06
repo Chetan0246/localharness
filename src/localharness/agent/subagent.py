@@ -1336,40 +1336,75 @@ def make_explore_agent_runner(
                 assert_grant_target_safe(_resolve_target_toolset(name, load_agent), agent_id=name)
         child_agent_tool = _build_child_agent_tool(name)
         child_ctx = _make_child_ctx(grant_handles)
-        if name == "cruncher":
-            # J3: harness-orchestrated over-window reduce. child_ctx carries the granted read-through
-            # store; grant_handles names which over-window bodies to crunch.
-            return await dispatch_cruncher_subagent(
-                task, grant_handles=grant_handles, llm=llm, bus=bus, base_registry=base_registry,
-                parent_session_id=get_parent_session_id(), permission_evaluator=permission_evaluator, gate=gate,
-                context_manager=child_ctx, depth=depth, max_subagent_depth=max_subagent_depth,
-                cruncher_config=cruncher_config, memory_store=memory_store, config_dir=config_dir,
-                state_dir=state_dir,
-            )
-        if name == "explore":
-            dispatch, base_builder = dispatch_explore_subagent, build_explore_config
-        elif name == "web-researcher":
-            dispatch, base_builder = dispatch_web_subagent, build_web_researcher_config
-        elif name == "search-verifier":
-            dispatch, base_builder = dispatch_search_verifier_subagent, build_search_verifier_config
-        else:
-            cfg = None
-            # Phase 33.1: the root agent is 'orchestrator' — never loadable as a delegation child
-            if load_agent is not None and name != "orchestrator":
-                try:
-                    cfg = load_agent(name)
-                except Exception:
-                    cfg = None
-            if cfg is None:
-                raise ValueError(
-                    f"Agent '{agent_id}' dispatch not wired (available: explore, "
-                    "web-researcher, search-verifier, cruncher, or any agents/<name>.yaml "
-                    "definition — you can CREATE one with the write tool, then delegate "
-                    "to it by name)"
+
+        # Dynamic Router: ensure specialist model is active
+        from localharness.orchestrator.dynamic_router import DynamicModelRouter
+        router = DynamicModelRouter.get_instance()
+        target_model = router.resolve_model_for_agent(name) if router.enabled else None
+        active_before = await router.get_active_model() if router.enabled else None
+        if router.enabled and target_model and target_model != active_before:
+            log.info("[Dynamic Router] Auto-switching to %s for agent '%s'", target_model, name)
+            await router.switch_model(target_model, llm=llm)
+
+        try:
+            if name == "cruncher":
+                # J3: harness-orchestrated over-window reduce. child_ctx carries the granted read-through
+                # store; grant_handles names which over-window bodies to crunch.
+                return await dispatch_cruncher_subagent(
+                    task, grant_handles=grant_handles, llm=llm, bus=bus, base_registry=base_registry,
+                    parent_session_id=get_parent_session_id(), permission_evaluator=permission_evaluator, gate=gate,
+                    context_manager=child_ctx, depth=depth, max_subagent_depth=max_subagent_depth,
+                    cruncher_config=cruncher_config, memory_store=memory_store, config_dir=config_dir,
+                    state_dir=state_dir,
                 )
-            return await dispatch_config_subagent(
+            if name == "explore":
+                dispatch, base_builder = dispatch_explore_subagent, build_explore_config
+            elif name == "web-researcher":
+                dispatch, base_builder = dispatch_web_subagent, build_web_researcher_config
+            elif name == "search-verifier":
+                dispatch, base_builder = dispatch_search_verifier_subagent, build_search_verifier_config
+            else:
+                cfg = None
+                # Phase 33.1: the root agent is 'orchestrator' — never loadable as a delegation child
+                if load_agent is not None and name != "orchestrator":
+                    try:
+                        cfg = load_agent(name)
+                    except Exception:
+                        cfg = None
+                if cfg is None:
+                    raise ValueError(
+                        f"Agent '{agent_id}' dispatch not wired (available: explore, "
+                        "web-researcher, search-verifier, cruncher, or any agents/<name>.yaml "
+                        "definition — you can CREATE one with the write tool, then delegate "
+                        "to it by name)"
+                    )
+                return await dispatch_config_subagent(
+                    task,
+                    agent_config=cfg,
+                    llm=llm,
+                    bus=bus,
+                    base_registry=base_registry,
+                    parent_session_id=get_parent_session_id(),
+                    permission_evaluator=permission_evaluator,
+                    gate=gate,
+                    context_manager=child_ctx,
+                    depth=depth,
+                    max_subagent_depth=max_subagent_depth,
+                    config_dir=config_dir,
+                    state_dir=state_dir,
+                )
+            # Built-in subagents are TUNABLE via an optional agents/<name>.yaml overlay (the real
+            # budget knob): base = the code-defined default config, overlaid per-field by the yaml
+            # when one exists (absent = pure defaults / no behavior change; malformed = explicit
+            # error surfaced to the model, never a silent fallback). No override hook wired (e.g.
+            # the bench runner) => None => the dispatch builds its own default, unchanged. The
+            # structural toolset stays fixed by the dispatcher — the overlay tunes AgentConfig fields.
+            config_override = (
+                load_builtin_override(name, base_builder(name))
+                if load_builtin_override is not None else None
+            )
+            return await dispatch(
                 task,
-                agent_config=cfg,
                 llm=llm,
                 bus=bus,
                 base_registry=base_registry,
@@ -1379,34 +1414,17 @@ def make_explore_agent_runner(
                 context_manager=child_ctx,
                 depth=depth,
                 max_subagent_depth=max_subagent_depth,
+                child_agent_tool=child_agent_tool,
+                config_override=config_override,
                 config_dir=config_dir,
                 state_dir=state_dir,
             )
-        # Built-in subagents are TUNABLE via an optional agents/<name>.yaml overlay (the real
-        # budget knob): base = the code-defined default config, overlaid per-field by the yaml
-        # when one exists (absent = pure defaults / no behavior change; malformed = explicit
-        # error surfaced to the model, never a silent fallback). No override hook wired (e.g.
-        # the bench runner) => None => the dispatch builds its own default, unchanged. The
-        # structural toolset stays fixed by the dispatcher — the overlay tunes AgentConfig fields.
-        config_override = (
-            load_builtin_override(name, base_builder(name))
-            if load_builtin_override is not None else None
-        )
-        return await dispatch(
-            task,
-            llm=llm,
-            bus=bus,
-            base_registry=base_registry,
-            parent_session_id=get_parent_session_id(),
-            permission_evaluator=permission_evaluator,
-            gate=gate,
-            context_manager=child_ctx,
-            depth=depth,
-            max_subagent_depth=max_subagent_depth,
-            child_agent_tool=child_agent_tool,
-            config_override=config_override,
-            config_dir=config_dir,
-            state_dir=state_dir,
-        )
+        finally:
+            if router.enabled and depth == 0:
+                orch_model = router.resolve_model_for_agent("orchestrator")
+                now_active = await router.get_active_model()
+                if orch_model != now_active:
+                    log.info("[Dynamic Router] Restoring orchestrator model %s", orch_model)
+                    await router.switch_model(orch_model, llm=llm)
 
     return _run_agent
