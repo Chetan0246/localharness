@@ -1,5 +1,97 @@
-active_endpoint: null
-extra_endpoints: []
+extra_endpoints:
+- name: ling-tiny
+  base_url: http://127.0.0.1:8080/v1
+  provider_type: llamacpp
+  gpu: true
+  lifecycle:
+    runtime: llamacpp
+    launch: binary
+    binary: /home/chetan/llama.cpp/build/bin/llama-server
+    model: /home/chetan/llama.cpp/models/Ling-3.0-tiny-Q4_K_M.gguf
+    port: 8080
+    gpu: true
+    extra_args:
+    - -a
+    - Ling-3.0-tiny-Q4_K_M.gguf
+    - -c
+    - '16384'
+    - --jinja
+    - -np
+    - '1'
+    - -ngl
+    - '99'
+    - -t
+    - '8'
+    - -tb
+    - '8'
+    - --cache-type-k
+    - q8_0
+    - --cache-type-v
+    - q8_0
+    - --flash-attn
+    - 'on'
+- name: gemma-4
+  base_url: http://127.0.0.1:8080/v1
+  provider_type: llamacpp
+  gpu: true
+  lifecycle:
+    runtime: llamacpp
+    launch: binary
+    binary: /home/chetan/llama.cpp/build/bin/llama-server
+    model: /home/chetan/llama.cpp/models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf
+    port: 8080
+    gpu: true
+    extra_args:
+    - -a
+    - gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf
+    - -c
+    - '16384'
+    - --jinja
+    - -np
+    - '1'
+    - -ngl
+    - '99'
+    - -t
+    - '8'
+    - -tb
+    - '8'
+    - --cache-type-k
+    - q8_0
+    - --cache-type-v
+    - q8_0
+    - --flash-attn
+    - 'on'
+- name: qwen-9b
+  base_url: http://127.0.0.1:8080/v1
+  provider_type: llamacpp
+  gpu: true
+  lifecycle:
+    runtime: llamacpp
+    launch: binary
+    binary: /home/chetan/llama.cpp/build/bin/llama-server
+    model: /home/chetan/llama.cpp/models/Qwen3.5-9B-Q4_K_M.gguf
+    port: 8080
+    gpu: true
+    extra_args:
+    - -a
+    - Qwen3.5-9B-Q4_K_M.gguf
+    - -c
+    - '8192'
+    - --jinja
+    - -np
+    - '1'
+    - -ngl
+    - '99'
+    - -t
+    - '8'
+    - -tb
+    - '8'
+    - --cache-type-k
+    - q8_0
+    - --cache-type-v
+    - q8_0
+    - --flash-attn
+    - 'on'
 org:
   audit_log_path: audit.jsonl
   context:
@@ -89,6 +181,8 @@ provider:
   api_key: none
   available_models:
   - gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf
+  - Ling-3.0-tiny-Q4_K_M.gguf
+  - Qwen3.5-9B-Q4_K_M.gguf
   base_url: http://127.0.0.1:8080/v1
   default_model: gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf
   inference_queue_wait_seconds: 600.0

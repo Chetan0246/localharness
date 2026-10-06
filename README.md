@@ -35,6 +35,84 @@ Running multi-agent systems on consumer laptops with tight VRAM budgets (4GB iGP
 2. **Lean 4-Tool Root Orchestrator:** The primary coordinator is assigned only `agent`, `remember`, `memory_search`, and `memory_get`. Because it lacks file, web, and shell tools, it is architecturally guided to delegate domain work rather than attempting to execute tasks itself.
 3. **Memory Tiering:** General user preferences (learning style, preferred explanations) are stored in the orchestrator's root memory. Domain-specific progress and notes are routed to the relevant specialist (e.g., Java DSA weaknesses to `dsa-mentor`, architecture decisions to `project-manager`).
 4. **Offloading Vector Operations to CPU:** Embedding generation runs locally on CPU using `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional vectors), preserving GPU memory exclusively for `llama.cpp` inference.
+5. **Dynamic 3-Tier Model Swapping:** The laptop cannot host multiple 4B–9B models concurrently in physical RAM without triggering Linux OOM or severe swap thrashing. LocalHarness enforces a **single-heavy box rule**: only one heavy model backend runs at a time, with a verified graceful shutdown and a 3-second GPU memory reclamation period before launching another tier.
+
+---
+
+## ⚡ 3-Tier Dynamic Local Model Stack (Single-Heavy Box Rule)
+
+On a **16GB laptop with 4GB shared UMA for an integrated GPU (AMD Radeon 780M)**, different tasks require different speed-to-intelligence trade-offs. Rather than forcing a single model to handle everything or overwhelming the unified memory by running multiple servers, LocalHarness supports a dynamic 3-tier architecture:
+
+```text
+                           ┌────────────────────────┐
+                           │      USER REQUEST      │
+                           └───────────┬────────────┘
+                                       │
+                ┌──────────────────────┼──────────────────────┐
+                ▼                      ▼                      ▼
+      ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+      │  TIER 1: FAST    │   │  TIER 2: DAILY   │   │  TIER 3: HEAVY   │
+      │  Ling-3.0-tiny   │   │   Gemma-4-E4B    │   │    Qwen3.5-9B    │
+      │     (~35 t/s)    │   │    (~13 t/s)     │   │     (~7 t/s)     │
+      └────────┬─────────┘   └────────┬─────────┘   └────────┬─────────┘
+               │                      │                      │
+       • Rapid tool loops      • Daily driver         • Complex coding
+       • Web/Doc lookups       • Multi-agent loops    • Architecture logic
+       • Fast search triage    • General reasoning    • Heavy algorithms
+               │                      │                      │
+       [web-researcher]        [orchestrator]         [coding-engineer]
+       [news-scout]            [dsa-mentor]           [data-engineer]
+       [document-analyst]      [study-tutor]
+                               [project-manager]
+                               [career-agent]
+                               [system-agent]
+```
+
+### Model Tier Specifications
+
+| Tier | Model | Parameters & Quant | Context | Speed | Role & Optimal Agents |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tier 1: Fast Executor** | `Ling-3.0-tiny` | 8B MoE / Q4_K_M (4.5GB) | 16,384 | **~35 t/s** | Rapid tool loops, fast web searches, routine triage. (`web-researcher`, `news-scout`, `document-analyst`) |
+| **Tier 2: Daily Driver** | `Gemma-4-E4B` | 4B Dense / Q4_K_XL (4.0GB) | 16,384 | **~13 t/s** | Balanced instruction following, general reasoning, daily multi-agent workflows. (`orchestrator`, `dsa-mentor`, `study-tutor`, `career-agent`, `project-manager`, `system-agent`) |
+| **Tier 3: Heavy Reasoner** | `Qwen3.5-9B` | 9B Dense / Q4_K_M (5.3GB) | 8,192 | **~7 t/s** | Complex coding, deep architecture planning, hard algorithmic problems. (`coding-engineer`, `data-engineer`) |
+
+### Switching Tiers on Demand
+
+You can switch models dynamically in two ways:
+
+#### 1. CLI Switcher Script (`scripts/switch_model.sh`)
+The switcher gracefully sends `SIGTERM` to the incumbent `llama-server`, waits 3 seconds (`GPU_FREE_SETTLE_SECONDS`) for kernel/AMDGPU unified memory reclamation, spawns the target model with optimal APU flags, polls `/health` until ready, and syncs `default_model` in `~/.localharness/config.yaml`:
+```bash
+# Switch to fast triage tier (~35 t/s):
+./scripts/switch_model.sh ling
+
+# Switch to daily driver (~13 t/s):
+./scripts/switch_model.sh gemma
+
+# Switch to heavy coding/reasoning tier (~7 t/s):
+./scripts/switch_model.sh qwen
+
+# Check active model, PID, and system RAM/VRAM:
+./scripts/switch_model.sh status
+
+# Stop active server and free memory:
+./scripts/switch_model.sh stop
+```
+
+#### 2. Native REPL Model Switcher (`/model`)
+Within the interactive LocalHarness REPL, the `/model` command discovers cold endpoints configured in `~/.localharness/config.yaml`:
+```text
+❯ /model
+Models:
+  1. gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf  (serving)  [active]
+  2. Ling-3.0-tiny-Q4_K_M.gguf  (cold on ling-tiny — /model launches it on the GPU)
+  3. Qwen3.5-9B-Q4_K_M.gguf  (cold on qwen-9b — /model launches it on the GPU)
+
+Switch with /model <name|number>, or scroll the menu and press Enter.
+❯ /model 2
+Launching ling-tiny — the swap can take several minutes...
+Switched to Ling-3.0-tiny-Q4_K_M.gguf on ling-tiny — http://127.0.0.1:8080/v1
+```
 
 ---
 
@@ -136,26 +214,22 @@ git clone https://github.com/Chetan0246/localharness.git
 cd localharness
 ```
 
-### 2. Start the Inference Server
-Run `llama-server` configured with Flash Attention and quantized KV caches:
+### 2. Launch or Switch Model Tiers
+Use the dynamic switcher to launch any of the three hardware-optimized model tiers:
 ```bash
-# Using the helper script:
-LLAMA_DIR="$HOME/llama.cpp" ./scripts/run_gemma.sh
+# Launch Daily Driver (Gemma 4 E4B, 16k ctx, ~13 t/s):
+./scripts/switch_model.sh gemma
+
+# Or launch Fast Executor (Ling-3.0-tiny, 16k ctx, ~35 t/s):
+./scripts/switch_model.sh ling
+
+# Or launch Heavy Reasoner (Qwen3.5-9B, 8k ctx, ~7 t/s):
+./scripts/switch_model.sh qwen
 ```
-Or start manually:
-```bash
-./build/bin/llama-server \
-  -m models/gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf \
-  -c 16384 \
-  --jinja \
-  -np 1 -ngl 99 -t 8 -tb 8 \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  --flash-attn on \
-  --host 127.0.0.1 --port 8080
-```
+The script automatically stops any incumbent model, reclaims unified GPU memory, and verifies server readiness.
 
 ### 3. Synchronize Agent Configurations
-Run the setup script to copy agent definitions to `~/.localharness/agents/`, configure CPU resonance embeddings, and run initial validation:
+Run the setup script to copy agent definitions to `~/.localharness/agents/`, configure the 3-tier endpoints, set CPU embeddings, and run system validation:
 ```bash
 ./scripts/setup_agents.sh
 ```
@@ -242,8 +316,9 @@ localharness/
 │   ├── config.yaml               # Global harness configuration
 │   └── overrides.yaml            # Machine-wide CPU embedding overrides
 ├── scripts/                      # Setup and Launcher Scripts
-│   ├── run_gemma.sh              # llama-server launcher
-│   └── setup_agents.sh           # Automated agent installation and validation
+│   ├── run_gemma.sh              # llama-server launcher (legacy standalone)
+│   ├── setup_agents.sh           # Automated agent installation and validation
+│   └── switch_model.sh           # 3-tier dynamic model switcher (ling/gemma/qwen)
 ├── src/localharness/             # Core harness runtime engine
 ├── pyproject.toml                # Project metadata and dependencies
 └── README.md

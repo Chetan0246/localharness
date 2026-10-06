@@ -21,13 +21,12 @@ mkdir -p "${TARGET_DIR}/agents"
 echo "--> Installing agent definitions into ${TARGET_DIR}/agents/..."
 cp -v "${REPO_DIR}/agents/"*.yaml "${TARGET_DIR}/agents/"
 
-# 2. Setup config.yaml if not present
-if [ ! -f "${TARGET_DIR}/config.yaml" ]; then
-    echo "--> Installing global config.yaml..."
-    cp -v "${REPO_DIR}/config/config.yaml" "${TARGET_DIR}/config.yaml"
-else
-    echo "--> Existing ${TARGET_DIR}/config.yaml preserved."
-fi
+# 2. Setup config.yaml
+echo "--> Installing global config.yaml with 3-tier dynamic model configuration..."
+cp -v "${REPO_DIR}/config/config.yaml" "${TARGET_DIR}/config.yaml"
+
+# 2b. Ensure scripts are executable
+chmod +x "${REPO_DIR}/scripts/"*.sh 2>/dev/null || true
 
 # 3. Setup overrides.yaml
 echo "--> Installing global overrides.yaml (CPU resonance embedding model)..."
