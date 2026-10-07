@@ -4,9 +4,20 @@
 [![Model: Gemma 4 E4B QAT](https://img.shields.io/badge/Model-Gemma%204%20E4B%20QAT-orange.svg)](https://huggingface.co/google/gemma-4-E4B-it)
 [![Runtime: llama.cpp](https://img.shields.io/badge/Inference-llama.cpp%20(16k%20ctx)-green.svg)](https://github.com/ggerganov/llama.cpp)
 [![Hardware: 16GB AMD APU](https://img.shields.io/badge/Hardware-16GB%20RAM%20%7C%204GB%20iGPU-purple.svg)](https://www.amd.com/)
+[![CI](https://github.com/Chetan0246/localharness/actions/workflows/ci.yml/badge.svg)](https://github.com/Chetan0246/localharness/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A local, hierarchical multi-agent assistant configuration built on the open-source **LocalHarness** runtime and tailored for resource-constrained edge hardware.
+
+![LocalHarness demo](assets/demo.gif)
+
+## How to run
+
+```bash
+uv sync --extra dev --extra dispatch --extra web
+./scripts/setup_agents.sh
+uv run localharness start
+```
 
 This repository bundles:
 1. **The LocalHarness Engine:** A lightweight agent layer providing YAML-configured agent definition, tool resolution, capability floor validation, and SQLite-backed memory for locally served LLMs.
